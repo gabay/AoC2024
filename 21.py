@@ -79,7 +79,8 @@ class DirectionalKeypad(Keypad):
 class Robot:
     keypad: Keypad
 
-    def get_sequences_for_pressing(self, goal: str) -> Iterable[str]:
+    @functools.cache
+    def get_sequences_for_pressing(self, goal: str) -> list[str]:
         pos = self.keypad.get_position_of_key("A")
         chunks: list[set[str]] = []
         for key in goal:
@@ -87,8 +88,7 @@ class Robot:
             chunks.append(self.get_sequences_from_to(pos, next_pos))
             pos = next_pos
 
-        for i in itertools.product(*chunks):
-            yield "".join(i)
+        return [''.join(i) for i in itertools.product(*chunks)]
 
     @functools.cache
     def get_sequences_from_to(self, src: Point, dst: Point) -> set[str]:
@@ -106,6 +106,7 @@ class Robot:
         return result
 
 
+
 def part_1(data: str) -> int:
     numeric_robot = Robot(NumericKeypad())
     result = 0
@@ -113,36 +114,34 @@ def part_1(data: str) -> int:
         print(line)
         shortest = None
         for seq in numeric_robot.get_sequences_for_pressing(line):
-            seq2 = get_shortest_sequence(seq, 2)
-            if shortest is None or len(shortest) > len(seq2):
-                shortest = seq2
-        print(len(shortest), "*", int(re.search("\d+", line).group()))
-        complexity = int(re.search("\d+", line).group()) * len(shortest)
+            seq2_len = sum(get_shortest_sequence_len(seq_chunk, 2) for seq_chunk in get_chunks(seq))
+            if shortest is None or shortest > seq2_len:
+                shortest = seq2_len
+        print(shortest, "*", int(re.search(r"\d+", line).group()))
+        complexity = int(re.search(r"\d+", line).group()) * shortest
         result += complexity
     return result
 
+def get_chunks(sequence: str) -> list[str]:
+    assert sequence.endswith("A")
+    start = 0
+    for end, character in enumerate(sequence):
+        if character == 'A':
+            yield sequence[start:end + 1]
+            start = end + 1
 
-def get_shortest_sequence(goal: str, depth: int) -> str:
-    robot = Robot(DirectionalKeypad())
-    next_depth_sequences = [goal]
-    for depth in range(depth):
-        sequences = next_depth_sequences
-        next_depth_sequences = []
-        print(depth, len(sequences))
-        shortest_length = min(map(len, sequences))
-        # print(
-        #     "trimmed:",
-        #     len([s for s in sequences if len(s) > shortest_length]),
-        #     "/",
-        #     len(sequences),
-        # )
-        for seq in [sequences[0]]:
-            if len(seq) == shortest_length:
-                next_depth_sequences += robot.get_sequences_for_pressing(seq)
-    return min(next_depth_sequences, key=len)
+@functools.cache
+def get_shortest_sequence_len(chunk: str, depth: int, robot: Robot = Robot(DirectionalKeypad())) -> int:
+    if depth == 0:
+        return len(chunk)
+    sequences = list(robot.get_sequences_for_pressing(chunk))
+    options = []
+    for seq in sequences:
+        options.append(sum(get_shortest_sequence_len(seq_chunk, depth - 1, robot) for seq_chunk in get_chunks(seq)))
+    return min(options)
+    # return sum(_get_shortest_sequence(chunk, depth) for chunk in get_chunks(goal))
 
 
-# DID NOT FINISH
 def part_2(data: str) -> int:
     numeric_robot = Robot(NumericKeypad())
     result = 0
@@ -150,11 +149,11 @@ def part_2(data: str) -> int:
         print(line)
         shortest = None
         for seq in numeric_robot.get_sequences_for_pressing(line):
-            seq2 = get_shortest_sequence(seq, 5)
-            if shortest is None or len(shortest) > len(seq2):
-                shortest = seq2
-        print(len(shortest), "*", int(re.search("\d+", line).group()))
-        complexity = int(re.search("\d+", line).group()) * len(shortest)
+            seq2_len = sum(get_shortest_sequence_len(seq_chunk, 25) for seq_chunk in get_chunks(seq))
+            if shortest is None or shortest > seq2_len:
+                shortest = seq2_len
+        print(shortest, "*", int(re.search(r"\d+", line).group()))
+        complexity = int(re.search(r"\d+", line).group()) * shortest
         result += complexity
     return result
 
